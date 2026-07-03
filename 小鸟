@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ 飞天小鸟挑战赛 ⚡</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            /* 禁用移动端双击缩放和长按菜单，优化点击体验 */
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        #game-wrapper {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        canvas {
+            background: linear-gradient(to bottom, #70c5ce 0%, #50b0ba 100%);
+            display: block;
+        }
+
+        /* 游戏结束和开始的遮罩层 */
+        #ui-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+        }
+
+        p {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #eee;
+        }
+
+        button {
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #d35400;
+            transition: all 0.1s;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #d35400;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    
+    <div id="ui-screen">
+        <h1 id="ui-title">飞天小鸟</h1>
+        <p id="ui-msg">点击屏幕或按【空格键】向上飞行</p>
+        <button id="start-btn" onclick="startGame()">开始游戏</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const uiScreen = document.getElementById('ui-screen');
+    const uiTitle = document.getElementById('ui-title');
+    const uiMsg = document.getElementById('ui-msg');
+    const startBtn = document.getElementById('start-btn');
+
+    // 游戏状态
+    let gameState = 'START'; // START, PLAYING, GAMEOVER
+    let score = 0;
+    let animationFrameId;
+
+    // 物理及游戏配置参数
+    const GRAVITY = 0.4;         // 重力，让小鸟下坠
+    const FLAP_STRENGTH = -6.5;   // 每次点击往上飞冲的速度
+    const PIPE_SPEED = 2.5;       // 柱子向左移动的速度
+    const PIPE_SPAWN_RATE = 100;  // 每隔多少帧生成一对新柱子
+    const PIPE_GAP = 140;         // 上下柱子之间的间隙通道大小
+
+    // 小鸟对象
+    let bird = {
+        x: 80,
+        y: 250,
+        radius: 14,
+        velocity: 0
+    };
+
+    // 柱子数组
+    let pipes = [];
+    let frameCount = 0;
+
+    // 初始化/重置游戏
+    function resetGame() {
+        bird.y = 250;
+        bird.velocity = 0;
+        pipes = [];
+        score = 0;
+        frameCount = 0;
+    }
+
+    // 开始/重新开始按钮点击事件
+    function startGame() {
+        uiScreen.style.display = 'none';
+        resetGame();
+        gameState = 'PLAYING';
+        gameLoop();
+    }
+
+    // 触发小鸟向上飞
+    function birdFlap() {
+        if (gameState === 'PLAYING') {
+            bird.velocity = FLAP_STRENGTH;
+        } else if (gameState === 'START' || gameState === 'GAMEOVER') {
+            startGame();
+        }
+    }
+
+    // 监听键盘空格键和鼠标/手指点击
+    window.addEventListener('keydown', function(e) {
+        if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault(); // 阻止空格键网页滚动的默认行为
+            birdFlap();
+        }
+    });
+    // 整个游戏区域点击或触摸都可以控制
+    document.getElementById('game-wrapper').addEventListener('mousedown', function(e) {
+        if(e.target.id !== 'start-btn') { // 避免和按钮点击冲突
+            birdFlap();
+        }
+    });
+    document.getElementById('game-wrapper').addEventListener('touchstart', function(e) {
+        if(e.target.id !== 'start-btn') {
+            e.preventDefault();
+            birdFlap();
+        }
+    });
+
+    // 游戏主循环
+    function gameLoop() {
+        if (gameState !== 'PLAYING') return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        frameCount++;
+
+        // 1. 更新并绘制小鸟
+        bird.velocity += GRAVITY;
+        bird.y += bird.velocity;
+
+        // 绘制小鸟（一个可爱的小黄圆圈）
+        ctx.beginPath();
+        ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#f1c40f';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#333';
+        ctx.stroke();
+        ctx.closePath();
+
+        // 眼睛
+        ctx.beginPath();
+        ctx.arc(bird.x + 6, bird.y - 4, 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'black';
+        ctx.fill();
+        ctx.closePath();
+
+        // 嘴巴
+        ctx.beginPath();
+        ctx.moveTo(bird.x + 12, bird.y);
+        ctx.lineTo(bird.x + 18, bird.y + 3);
+        ctx.lineTo(bird.x + 12, bird.y + 6);
+        ctx.fillStyle = '#e67e22';
+        ctx.fill();
+        ctx.closePath();
+
+        // 2. 生成和管理柱子
+        if (frameCount % PIPE_SPAWN_RATE === 0) {
+            // 随机计算上方柱子的高度
+            let minHeight = 50;
+            let maxHeight = canvas.height - PIPE_GAP - minHeight - 40; // 留出地面距离
+            let topPipeHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+
+            pipes.push({
+                x: canvas.width,
+                topHeight: topPipeHeight,
+                bottomY: topPipeHeight + PIPE_GAP,
+                width: 60,
+                passed: false
+            });
+        }
+
+        // 遍历所有柱子
+        for (let i = pipes.length - 1; i >= 0; i--) {
+            let p = pipes[i];
+            p.x -= PIPE_SPEED; // 柱子向左移动
+
+            // 绘制绿色柱子（上柱子）
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(p.x, 0, p.width, p.topHeight);
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#27ae60';
+            ctx.strokeRect(p.x, 0, p.width, p.topHeight);
+
+            // 绘制下柱子
+            let bottomHeight = canvas.height - p.bottomY;
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(p.x, p.bottomY, p.width, bottomHeight);
+            ctx.strokeRect(p.x, p.bottomY, p.width, bottomHeight);
+
+            // 碰撞检测：检查小鸟的外切正方形是否与柱子重叠
+            if (bird.x + bird.radius > p.x && bird.x - bird.radius < p.x + p.width) {
+                // 撞击上方柱子 或 撞击下方柱子
+                if (bird.y - bird.radius < p.topHeight || bird.y + bird.radius > p.bottomY) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // 计分：当小鸟安全越过柱子后缘
+            if (!p.passed && p.x + p.width < bird.x) {
+                score++;
+                p.passed = true;
+            }
+
+            // 清理已经移出屏幕的柱子，节约内存
+            if (p.x + p.width < 0) {
+                pipes.splice(i, 1);
+            }
+        }
+
+        // 3. 边界死亡判定（掉出屏幕底部，或者飞出天际线太高）
+        if (bird.y + bird.radius >= canvas.height || bird.y - bird.radius <= 0) {
+            gameOver();
+            return;
+        }
+
+        // 4. 实时绘制右上角得分
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 28px Arial';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(`得分: ${score}`, 20, 45);
+        ctx.shadowBlur = 0; // 重置阴影以免影响其他绘制
+
+        // 循环推进下一帧
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    // 游戏结束触发
+    function gameOver() {
+        gameState = 'GAMEOVER';
+        cancelAnimationFrame(animationFrameId);
+        
+        // 显示结算界面 UI
+        uiTitle.innerText = "游戏结束 💀";
+        uiMsg.innerHTML = `本次得分：<span style="color:#f1c40f;font-size:24px;font-weight:bold;">${score}</span><br><br>别灰心，再试一次吧！`;
+        startBtn.innerText = "重新开始";
+        uiScreen.style.display = 'flex';
+    }
+</script>
+
+</body>
+</html>
